@@ -1,0 +1,72 @@
+# =============================================================
+# Hybrid-Three-Pillar-SOC-Detection-Lab — .gitignore
+# Purpose: nothing sensitive ever enters git history. This file
+# must exist in the repo root BEFORE the first `git add`.
+# The 🔴 files below are the-file-IS-the-secret: excluded, never scrubbed.
+# =============================================================
+
+# ---- Private keys / SSH ------------------------------------
+*.key
+*.pem
+*.ppk
+id_rsa*
+id_ed25519*
+known_hosts
+
+# ---- Credential & secret dumps -----------------------------
+SOC_LAB_info.txt
+*secret*
+*secrets*
+*password*
+*credential*
+*.token
+.env
+.env.*
+
+# ---- Microsoft Defender / MDE onboarding packages ----------
+*onboard*
+*Onboard*
+WindowsDefenderATPOnboardingPackage*
+
+# ---- Azure Arc onboarding scripts (subscription + tenant IDs)
+OnboardingScript*.ps1
+
+# ---- Archives (often bundle the above) ---------------------
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# ---- Large media — keep the repo lean ----------------------
+# Publish select cropped stills instead of raw recordings.
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# ---- Safe staging area for raw/unscrubbed working files ----
+# Drop anything not-yet-scrubbed in here; git will never see it.
+_local/
+scratch/
+raw/
+
+# ---- OS / editor cruft -------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+
+# =============================================================
+# NOTE on the 🟡 scrub-then-commit files (ARM templates, the
+# session log, README/runbook/.docx): these are NOT ignored on
+# purpose — they belong in the repo, but ONLY in scrubbed form.
+# Workflow: keep the raw copy in _local/, scrub a copy into the
+# real repo folder, then commit the scrubbed copy. The final
+# pre-push grep check is your last line of defense for these.
+# =============================================================
