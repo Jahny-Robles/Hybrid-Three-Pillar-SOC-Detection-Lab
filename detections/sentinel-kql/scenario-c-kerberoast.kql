@@ -1,0 +1,13 @@
+// Scenario C — Part 2: Kerberoasting (T1558.003)
+// 4769 (Kerberos service ticket requested), ingested as raw EventData XML via DCR.
+// Detects RC4-HMAC (0x17) ticket requests for non-machine service accounts.
+SecurityEvent
+| where EventID == 4769
+| extend ServiceName   = extract(@'Name="ServiceName">([^<]+)<', 1, EventData)
+| extend EncType       = extract(@'Name="TicketEncryptionType">([^<]+)<', 1, EventData)
+| extend ClientAddress = extract(@'Name="IpAddress">([^<]+)<', 1, EventData)
+| extend TargetUser    = extract(@'Name="TargetUserName">([^<]+)<', 1, EventData)
+| where EncType == "0x17"            // RC4-HMAC — weak cipher, Kerberoast tell
+| where ServiceName !endswith "$"    // exclude machine accounts
+| where ServiceName != "krbtgt"
+| project TimeGenerated, TargetUser, ServiceName, EncType, ClientAddress
