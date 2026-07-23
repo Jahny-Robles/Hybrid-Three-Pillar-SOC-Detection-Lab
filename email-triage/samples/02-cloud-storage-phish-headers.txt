@@ -1,0 +1,22 @@
+# Real phishing email pulled from my Gmail spam (23 Jul 2026).
+# Personal address redacted; URLs defanged. Verdict: MALICIOUS (payment/credential phish).
+# Analyzed in writeups/02-cloud-storage-phish.md.
+
+From: Payment_Declined <djzyiuzlfpb@iuat.oydhtestpxkqd[.]us>
+   (display name uses Unicode bold look-alike chars: "Payment_Declined")
+To: rob******ny@gmail.com
+Subject: roblesjahny Account Has been Blocked! Your Photos and Videos will be Removed Thu,23 Jul-2026 . take action!
+Date: Thu, 23 Jul 2026 04:34:20 -0400
+Return-Path: <Return@5557148[.]com>
+
+--- Gmail "Show original" summary ---
+SPF:   PASS with IP 23.106.58.119   (sending domain 5557148[.]com)
+DKIM:  none
+DMARC: FAIL
+
+--- Notable ---
+Content-Type: multipart/report; report-type=delivery-status   (fake bounce wrapper)
+Payload URL (defanged): hxxps://storage.googleapis[.]com/gocommercially/filipinomarketers.html#<hex>
+Body: "Payment Issue - Cloud Storage", fake 96% storage bar, 4-min countdown,
+      "Update Payment Details" button, fake "Security Recommendations" block,
+      hidden filler text (scraped news/app content) to evade spam filters.
