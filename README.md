@@ -56,6 +56,12 @@ New to any of the terms below? See the [**Glossary**](GLOSSARY.md).
 
 ---
 
+→ The validated rule itself: [`detections/sentinel-kql/scenario-c-kerberoast.kql`](detections/sentinel-kql/scenario-c-kerberoast.kql)
+
+## Agentic detection: autonomous email triage (pilot)
+
+Building on the hand-authored detections above, the lab includes an **agentic email-triage pilot** ([`agentic-triage/`](agentic-triage/)) — an autonomous phishing-triage agent with an L0 "recommend-only" governance layer, validated live against 11 real inbox emails.
+
 ## Hands-On Detection Engineering
 
 Each attack is run from the Kali attacker box, then detected and documented across all three pillars. Detections are mapped to **MITRE ATT&CK** and built into a repeatable loop:
