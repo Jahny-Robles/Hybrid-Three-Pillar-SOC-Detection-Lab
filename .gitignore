@@ -3,33 +3,78 @@
 # Purpose: nothing sensitive ever enters git history. This file
 # must exist in the repo root BEFORE the first `git add`.
 # The 🔴 files below are the-file-IS-the-secret: excluded, never scrubbed.
+#
+# Patterns are deliberately PRECISE rather than broad. In a security
+# repo, a bare *credential* / *secret* / *password* / *onboard* wildcard
+# silently swallows legitimate published content — detection rules for
+# credential access, LSASS/secretsdump writeups, password-policy docs,
+# onboarding screenshots. Git skips them with no error, so the loss is
+# invisible. Match the artifact, not the vocabulary.
 # =============================================================
 
 # ---- Private keys / SSH ------------------------------------
 *.key
 *.pem
 *.ppk
+*.pfx
+*.p12
 id_rsa*
 id_ed25519*
 known_hosts
 
 # ---- Credential & secret dumps -----------------------------
+# Precise: real secret files, not any filename mentioning the topic.
 SOC_LAB_info.txt
-*secret*
-*secrets*
-*password*
-*credential*
 *.token
 .env
 .env.*
+secrets.*
+*.secret
+*.secrets
+*-secrets.json
+*-secrets.yml
+*-secrets.yaml
+*_secret.*
+*_secrets.*
+*_credentials.*
+*-credentials.json
+*-credentials.csv
+credentials.json
+credentials.csv
+credentials.txt
+passwords.txt
+passwords.csv
+*.kdbx
+*.ovpn
 
 # ---- Microsoft Defender / MDE onboarding packages ----------
-*onboard*
-*Onboard*
+# The PACKAGE is the secret; docs and screenshots about onboarding are not.
 WindowsDefenderATPOnboardingPackage*
+*OnboardingPackage*
+*OnboardingScript*
+WindowsDefenderATPLocalOnboardingScript*
 
 # ---- Azure Arc onboarding scripts (subscription + tenant IDs)
 OnboardingScript*.ps1
+azcmagent-onboard*.ps1
+
+# ---- Lab automation config (tenant + subscription IDs) -----
+# The .example version IS committed; the real one never is.
+config/lab-config.json
+**/lab-config.json
+!**/lab-config.example.json
+
+# ---- Kerberos / hash / capture artifacts -------------------
+# Real cracked material and captures from lab exercises.
+*.kirbi
+*.ccache
+*.ntds
+*.pcap
+*.pcapng
+*.hashes
+*.hccapx
+hashes.txt
+*krb5tgs*
 
 # ---- Archives (often bundle the above) ---------------------
 *.zip
@@ -52,6 +97,13 @@ OnboardingScript*.ps1
 _local/
 scratch/
 raw/
+samples/raw/
+
+# ---- Real email specimens (email-triage folder) ------------
+# Redacted headers ARE committed; raw specimens never are.
+email-triage/cases/
+*.eml
+*.msg
 
 # ---- OS / editor cruft -------------------------------------
 .DS_Store
