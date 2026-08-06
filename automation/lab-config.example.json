@@ -1,0 +1,9 @@
+﻿{
+  "tenantId": "<TENANT_ID>",
+  "subscriptionId": "<SUBSCRIPTION_ID>",
+  "resourceGroup": "<RESOURCE_GROUP>",
+  "location": "<LOCATION>",
+  "dcrName": "windows10-security-events",
+  "dcrAssociationName": "windows10-security-events-association",
+  "machines": ["<VICTIM_HOSTNAME>", "<DC_HOSTNAME>"]
+}
