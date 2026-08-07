@@ -56,11 +56,15 @@ New to any of the terms below? See the [**Glossary**](GLOSSARY.md).
 
 ---
 
-→ The validated rule itself: [`detections/sentinel-kql/scenario-c-kerberoast.kql`](detections/sentinel-kql/scenario-c-kerberoast.kql)
+## Email triage & phishing analysis
 
-## Agentic detection: autonomous email triage (pilot)
+Alongside the endpoint detection work, [`email-triage/`](email-triage/) covers a core Tier 1 responsibility: reaching a **defensible verdict** on suspicious mail. It contains a 7-step [methodology](email-triage/methodology.md), an [SPF/DKIM/DMARC explainer](email-triage/spf-dkim-dmarc.md), a [one-page Tier 1 playbook](email-triage/runbook-email-triage.md), and worked writeups of **real emails from my own inbox** — one legitimate recruiter message correctly cleared as benign, and one phish pulled from spam that hid its payload on Google's own `storage.googleapis.com`.
 
-Building on the hand-authored detections above, the lab includes an **agentic email-triage pilot** ([`agentic-triage/`](agentic-triage/)) — an autonomous phishing-triage agent with an L0 "recommend-only" governance layer, validated live against 11 real inbox emails.
+Clearing legitimate mail correctly matters as much as catching the fake: false positives are what cause alert fatigue. Every writeup is a real specimen I analyzed myself — no invented samples.
+
+### Agentic detection: autonomous email triage (pilot)
+
+Building on that manual method, the lab includes an **agentic email-triage pilot** ([`agentic-triage/`](agentic-triage/)) — an autonomous phishing-triage agent with an L0 "recommend-only" governance layer, validated live against 11 real inbox emails.
 
 ## Hands-On Detection Engineering
 
@@ -132,6 +136,8 @@ This lab was not frictionless — and that's the point. A few of the production-
 
 - **Detection coverage gap (Scenario C).** A successful Kerberoast was invisible to Sentinel because the Domain Controller had never been onboarded. Onboarded the DC (Arc + AMA + DCR), authored the detection, and validated it against live attack telemetry — the clearest lesson in the lab: *detection coverage must follow where telemetry is generated.*
 
+- **The cloud reported success while nothing was installed.** Azure returned `provisioningState: Succeeded` for the monitoring-agent extension on every attempt, yet zero events reached the SIEM. Multiple days went into the wrong theories — including a connectivity probe against `8.8.8.8:443` that fails in this environment even when the network is perfectly healthy, making a working network look broken. The actual root cause was the **Windows Installer service (`msiserver`) being stopped**: the extension hands its MSI to that service, which silently did nothing while the control plane reported success. A five-second fix at the end of a multi-day chase, and the lesson that stuck: *when a control plane reports success but nothing appears locally, stop trusting the status field and verify on the box.* I then built [lab lifecycle automation](automation/) so the recovery is one command instead of an evening — and tested it by deliberately breaking the lab, which surfaced a real bug in my own script. ([Runbook](runbooks/golden-image-restore.md) · [evidence](screenshots/))
+
 ---
 
 ## SOC Skills → Job Relevance
@@ -147,6 +153,8 @@ Built specifically to map onto Tier 1/2 SOC analyst work and **SC-200 (Microsoft
 | Active Directory attack awareness | Kerberoasting detection (DCSync / Golden Ticket on the roadmap) |
 | Log source & telemetry management | Arc/AMA/DCR pipeline, coverage-gap remediation, Elastic Fleet |
 | Documentation & runbooks | This repo + AMA/Arc recovery runbook |
+| Phishing / email triage | [Method, playbook, and real analyzed specimens](email-triage/) (T1566) |
+| Operational recovery & automation | [Golden images, one-command restore, health verification](automation/) — PowerShell, tested against a real break |
 
 ---
 
@@ -166,8 +174,21 @@ Hybrid-Three-Pillar-SOC-Detection-Lab/
 │   │   └── scenario-c-kerberoast.kql  ← validated Kerberoast detection     ✅
 │   ├── elastic-eql/                   ← EQL detections                [roadmap]
 │   └── sigma/                         ← portable Sigma rules          [roadmap]
+├── email-triage/                      ← phishing triage method + real writeups ✅
+│   ├── methodology.md                 ← 7-step triage process
+│   ├── spf-dkim-dmarc.md              ← what each auth check actually proves
+│   ├── runbook-email-triage.md        ← one-page Tier 1 playbook
+│   └── writeups/                      ← real analyzed emails (benign + malicious)
+├── agentic-triage/                    ← autonomous email-triage agent pilot ✅
+├── automation/                        ← lab lifecycle tooling (PowerShell)  ✅
+│   ├── Restore-Lab.ps1                ← one-command Arc + agent + DCR restore
+│   ├── Test-LabHealth.ps1             ← agent status + DCR association check
+│   ├── Test-CloneType.ps1             ← golden-clone FULL vs LINKED verifier
+│   └── lab-config.example.json        ← config template (real values git-ignored)
 ├── runbooks/
-│   └── ama-arc-snapshot-revert-recovery.md   ← AMA / Arc recovery          ✅
+│   ├── ama-arc-snapshot-revert-recovery.md   ← AMA / Arc recovery          ✅
+│   └── golden-image-restore.md        ← golden images + restore procedure  ✅
+├── screenshots/                       ← outage → recovery evidence, in order ✅
 └── soc-reports/                       ← per-scenario analyst reports  [roadmap]
 ```
 
@@ -179,6 +200,8 @@ Hybrid-Three-Pillar-SOC-Detection-Lab/
 
 🟢 **Infrastructure complete** — all three pillars live and ingesting.
 🟢 **Scenario C (Credential Access) complete** — LSASS dump + Kerberoasting, detected and validated across pillars; writeup and detection rule published.
+🟢 **Email triage published** — method, Tier 1 playbook, and real analyzed specimens (benign + malicious), plus an agentic triage pilot.
+🟢 **Lab lifecycle automation published** — golden images, one-command restore, and health verification, tested end-to-end against a deliberate break.
 🔨 **In progress** — remaining scenarios (A, B, D, E), per-scenario SOC reports, and portable Sigma/EQL detections.
 
 This repo is actively growing as I work through each scenario. Star/watch to follow along.
