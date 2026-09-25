@@ -8,6 +8,10 @@
 
 ## Overview
 
+> **In one sentence:** the same attacker, seen by three different kinds of control, lights up in three different places — and the hardest part of "detecting" the Kerberoast wasn't the query, it was noticing the Domain Controller's logs never reached the SIEM at all.
+
+**How to read this writeup.** Part 1 (LSASS dump) is an *EDR* story — the endpoint stops it. Part 2 (Kerberoasting) is a *SIEM* story — the endpoint shrugs, and the detection only works once the right log source is flowing. The screenshots below are the actual lab evidence for each claim, cropped to remove tenant/subscription IDs.
+
 Scenario C runs two real credential-access techniques against a domain-joined victim and a Domain Controller, then compares how three different classes of security control respond to each:
 
 | Class | Product (pillar) | Role |
@@ -60,7 +64,13 @@ MDE prevented the dump behaviorally *before completion* and raised an incident:
 - Behavioral ThreatID **2147786203** (behavior-based, not a file signature).
 - Full process tree captured: `desktop-5epjut2` → `powershell.exe` → `rundll32.exe`, running as `Administrator`.
 
+![MDE Incident 2 — 'DumpLsass' hacktool prevented from executing](../screenshots/scenario-c/01-mde-incident-dumplsass.png)
+
+![MDE alert detail — behavioral prevention, Credential Access](../screenshots/scenario-c/02-mde-alert-blocked.png)
+
 **Layered-defense finding:** an in-scenario attempt to disable Defender real-time protection as local admin was refused — **Tamper Protection** held (`IsTamperProtected: True`). This is a strong story on its own: even with admin, the attacker could not blind the EDR before acting.
+
+![Tamper Protection held — IsTamperProtected: True even as admin](../screenshots/scenario-c/03-tamper-protection-held.png)
 
 **SIEM (Sentinel / Elastic) — detectable via process-access telemetry.**
 The dump attempt generates a Sysmon **Event ID 10 (ProcessAccess)** targeting `lsass.exe`. Two lessons made this work as a *reliable* detection rather than a noisy one:
@@ -101,14 +111,28 @@ The attack succeeded and the DC logged 4769 locally — **but Sentinel saw nothi
 
 This is the single most valuable lesson in the whole project: **detection coverage must follow telemetry placement.** A perfectly-authored detection rule is worthless if the log source it depends on never ships to the SIEM. The attack being "invisible" was not a rule problem — it was a telemetry-plumbing problem.
 
+![The coverage gap: the 4769 query returns nothing because the DC never shipped to Sentinel](../screenshots/scenario-c/04-coverage-gap-4769-empty.png)
+
 **Remediation:**
 - Arc-enabled the DC (`WIN-1C8FND59J1C`), deployed AMA.
 - Added the DC to the `windows10-security-events` DCR (both victim and DC now associated).
 - Confirmed the DC now ships Security events to Sentinel; 4769 became visible end-to-end.
 
+![DCR Resources — both the victim and the DC now associated](../screenshots/scenario-c/05-dcr-victim-and-dc-associated.png)
+
+![4769 (Kerberos service ticket) events now landing from the DC](../screenshots/scenario-c/06-dc-4769-landing.png)
+
 ### Authored detection (Sentinel KQL)
 
 Key detection lesson: **this DCR ingests 4769 as raw `EventData` XML**, not parsed columns — the KQL has to parse the fields out before it can filter. Final working rule filters for the RC4 encryption type and excludes machine accounts:
+
+The fields don't arrive as columns — 4769 lands as a single raw `EventData` XML blob:
+
+![4769 EventData arriving as raw XML, not parsed columns](../screenshots/scenario-c/07-4769-raw-eventdata-xml.png)
+
+A first attempt to reach the fields with `parse_xml`/`pivot` failed to resolve the encryption-type column — the fix was `extract()` against the raw XML instead:
+
+![parse_xml/pivot attempt fails to resolve TicketEncryptionType](../screenshots/scenario-c/08-parse-xml-attempt-failed.png)
 
 ```kql
 // Scenario C — Part 2: Kerberoasting (T1558.003)
@@ -130,6 +154,8 @@ SecurityEvent
 > [`detections/sentinel-kql/scenario-c-kerberoast.kql`](../detections/sentinel-kql/scenario-c-kerberoast.kql).
 
 **Validation:** rule returns a single clean row — service `svc-sql-lab`, `EncType 0x17`, client address `192.168.10.102` (the Kali attacker). True positive, no noise.
+
+![Validated Kerberoast detection — svc-sql-lab / 0x17 / 192.168.10.102](../screenshots/scenario-c/09-kerberoast-detection-validated.png)
 
 ### Part 2 results
 
@@ -183,8 +209,21 @@ Takeaways a SOC lives by:
 
 ## Validation evidence
 
-Cropped, secret-safe screenshots in [`../screenshots/`](../screenshots/):
-- MDE Incident 2 — process tree + behavioral block *(address bar cropped: tenant ID removed)*.
-- Kerberoast detection query returning the single `svc-sql-lab` / `0x17` / `192.168.10.102` row.
+All evidence for this scenario is in [`../screenshots/scenario-c/`](../screenshots/scenario-c/), in narrative order:
 
-> Raw session capture with live values (ticket hash, lab password, GUIDs) is intentionally excluded from this repo.
+| # | File | What it proves |
+|---|---|---|
+| 01 | `01-mde-incident-dumplsass.png` | MDE Incident 2 — DumpLsass hacktool prevented, full process tree |
+| 02 | `02-mde-alert-blocked.png` | Alert detail — behavioral prevention, Credential Access category |
+| 03 | `03-tamper-protection-held.png` | Tamper Protection held (`IsTamperProtected: True`) even as admin |
+| 04 | `04-coverage-gap-4769-empty.png` | The coverage gap — 4769 query returns nothing before DC onboarding |
+| 05 | `05-dcr-victim-and-dc-associated.png` | DCR Resources — victim + DC both associated (gap closed) |
+| 06 | `06-dc-4769-landing.png` | 4769 events now arriving from the DC |
+| 07 | `07-4769-raw-eventdata-xml.png` | 4769 lands as raw `EventData` XML, not parsed columns |
+| 08 | `08-parse-xml-attempt-failed.png` | `parse_xml`/`pivot` attempt fails — why `extract()` is used |
+| 09 | `09-kerberoast-detection-validated.png` | Validated detection — `svc-sql-lab` / `0x17` / `192.168.10.102` |
+| 10 | `10-snapshot-scenario-c-complete.png` | VMware snapshot marking Scenario C complete + validated |
+
+Browser address bars (tenant/subscription IDs) and the signed-in account are cropped out of every image. The raw session capture with live values (ticket hash, lab password, GUIDs) is intentionally excluded from this repo.
+
+![VMware snapshot — 3Pillars-ScenarioC-Complete, both detections validated](../screenshots/scenario-c/10-snapshot-scenario-c-complete.png)
