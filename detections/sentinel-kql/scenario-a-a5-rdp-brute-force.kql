@@ -1,0 +1,24 @@
+// Scenario A — A5: RDP Brute Force (T1110.001)
+// With NLA disabled, RDP brute-force failures land as 4625 LogonType 3 / NtLmSsp /
+// 0xC000006A — identical to SMB brute force (A4) at the 4625 layer.
+// The RDP discriminator is Event 261 ("Listener RDP-Tcp received a connection") on
+// TerminalServices-RemoteConnectionManager/Operational, which lands in the Event
+// table. Cross-table correlation: SecurityEvent 4625 JOIN Event 261 by host + time bin.
+// PREREQUISITE: the TerminalServices-RemoteConnectionManager/Operational channel
+// must be in a DCR — it is not collected by default.
+let burst_window = 5m;
+let min_failures = 5;
+let failures = SecurityEvent
+    | where EventID == 4625 and SubStatus == "0xc000006a"
+    | where Account !endswith "$" and Account !endswith "\\"
+    | summarize FailedCount = count(), Accounts = make_set(Account, 10)
+        by Computer, TimeBin = bin(TimeGenerated, burst_window);
+let rdp = Event
+    | where Source == "Microsoft-Windows-TerminalServices-RemoteConnectionManager" and EventID == 261
+    | summarize RdpConnections = count()
+        by Computer, TimeBin = bin(TimeGenerated, burst_window);
+failures
+| join kind=inner rdp on Computer, TimeBin
+| where FailedCount >= min_failures
+| project TimeBin, Computer, Accounts, FailedCount, RdpConnections
+| extend Verdict = "RDP brute force (4625 + RDP listener correlation)"

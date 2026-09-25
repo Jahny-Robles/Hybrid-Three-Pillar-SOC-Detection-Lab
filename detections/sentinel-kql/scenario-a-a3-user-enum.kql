@@ -1,0 +1,29 @@
+// Scenario A — A3: User Enumeration (T1589.002)
+// Many accounts, one password, from a single source. SubStatus separates
+// accounts that do not exist (0xC0000064) from accounts that DO exist but got
+// the wrong password (0xC000006A) — so the rule names the valid accounts found.
+// Same 4625 as A4; opposite shape. See scenarios/scenario-a.md.
+let burst_window = 10m;
+let min_users = 5;
+SecurityEvent
+| where EventID == 4625
+| where IpAddress != "-" and isnotempty(TargetUserName)
+| where TargetUserName !endswith "$"
+| extend Outcome = case(
+    SubStatus =~ "0xc0000064", "UserNotFound",
+    SubStatus =~ "0xc000006a", "WrongPassword",
+    "Other")
+| summarize
+    TotalAttempts = count(),
+    DistinctUsers = dcount(TargetUserName),
+    NotFoundCount = countif(Outcome == "UserNotFound"),
+    ValidHitCount = countif(Outcome == "WrongPassword"),
+    UsersProbed   = make_set(TargetUserName, 30),
+    ValidAccounts = make_set_if(TargetUserName, Outcome == "WrongPassword", 15),
+    FirstSeen     = min(TimeGenerated),
+    LastSeen      = max(TimeGenerated)
+    by IpAddress, bin(TimeGenerated, burst_window)
+| where DistinctUsers >= min_users and NotFoundCount > 0
+| extend EnumVerdict = iff(ValidHitCount > 0, "Enumeration + valid account(s) discovered", "Username probing")
+| project FirstSeen, LastSeen, IpAddress, TotalAttempts, DistinctUsers, NotFoundCount, ValidHitCount, ValidAccounts, UsersProbed, EnumVerdict
+| sort by DistinctUsers desc

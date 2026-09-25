@@ -1,0 +1,21 @@
+// Scenario A — A4: Password Brute Force (T1110.001)
+// One account, many failed passwords from a single source = brute force.
+// Distinct from A3 (many accounts, one password) by SubStatus + shape.
+// Account !endswith "\\" drops the benign null/anonymous-session 4625 that
+// netexec opens first (TargetAccount "\", SubStatus 0x0).
+let burst_window = 5m;
+let min_failures = 5;
+SecurityEvent
+| where EventID == 4625
+| where IpAddress != "-" and Account !endswith "$" and Account !endswith "\\"
+| where SubStatus == "0xc000006a"                  // valid user, wrong password
+| summarize
+    FailedCount = count(),
+    FirstSeen   = min(TimeGenerated),
+    LastSeen    = max(TimeGenerated),
+    LogonTypes  = make_set(LogonType)
+    by IpAddress, Account, bin(TimeGenerated, burst_window)
+| where FailedCount >= min_failures
+| extend BurstSeconds = datetime_diff('second', LastSeen, FirstSeen)
+| project FirstSeen, LastSeen, IpAddress, Account, FailedCount, LogonTypes, BurstSeconds
+| sort by FailedCount desc

@@ -85,7 +85,7 @@ A two-part credential-access exercise showing how three classes of control see t
 
 ## Detection-engineering highlight #2: same event, opposite shape (Scenario A)
 
-Scenario A is where the lab moves from "can I detect one attack" to "can I tell two attacks apart when they generate the identical event ID." Four examples are validated against live telemetry and running as custom Sentinel analytics rules with MITRE mapping and entity mapping.
+Scenario A is where the lab moves from "can I detect one attack" to "can I tell two attacks apart when they generate the identical event ID." Four examples are validated against live telemetry and running as custom Sentinel analytics rules with MITRE mapping and entity mapping. Full writeup with per-example DETECT → RESPOND → RECOVER reporting and validation screenshots: [`scenarios/scenario-a.md`](scenarios/scenario-a.md).
 
 **A2 — SMB share enumeration (T1135 / T1595.002).** Object-access auditing was *off* on the victim — the before/after of enabling `File Share` + `Detailed File Share` auditing is the PROTECT evidence in the report. An authenticated `nxc smb --shares` run produced 5140/5145 events naming the real admin shares, with 5145 `RelativeTargetName` capturing the tool's probe files and its `srvsvc` / `svcctl` named-pipe binds — strong, specific IOCs. The rule keys burst logic on source IP: many shares, varied access masks, tight window.
 
@@ -103,6 +103,8 @@ Same event ID, same table, same parser — opposite intent. Reading `SubStatus` 
 **A5 — RDP brute force (T1110.001): the cross-table correlation.** The expected answer is "RDP failures are LogonType 10." They are not — RDP brute-force failures land as **4625 LogonType 3**, and with NLA disabled they are *indistinguishable from SMB brute force* at the 4625 layer (same NtLmSsp / NTLM / `0xC000006A`). The discriminator lives on a different channel entirely: **Event 261** on `TerminalServices-RemoteConnectionManager/Operational` ("Listener RDP-Tcp received a connection"). The A5 rule joins `SecurityEvent` 4625 against `Event` 261 by host and time bin — a genuine cross-table correlation rather than a single-table threshold.
 
 **Bonus finding:** with all four deployed, Sentinel's investigation graph auto-correlated the A4 brute force and the A2 share enumeration through the shared attacker IP — the incident-correlation behavior a Tier 1 analyst actually works with, demonstrated on my own rules.
+
+**The infrastructure fix that unblocked all four:** the A2–A4 rules initially returned nothing while the pipeline looked healthy — a `Security!*` XPath under a generic `windowsEventLogs` data source was routing Windows Security events into the **`Event`** table, not **`SecurityEvent`**, so every rule was querying an empty set. Diagnosing that (and a second fault — an AMA extension that existed in Azure but was never installed on the guest) was the real work behind Scenario A. Both are written up under A5 with before/after evidence.
 
 **Parser note worth keeping:** 4625 and 4688 arrive in `SecurityEvent` as *native parsed columns* (`Account`, `IpAddress`, `LogonType`, `SubStatus`, `NewProcessName`, `CommandLine`) — no `extract()` needed. The 4769 Kerberoast rule in Scenario C *did* need XML parsing. Knowing which events arrive pre-parsed and which don't is half of writing KQL that works the first time.
 
@@ -191,11 +193,14 @@ Hybrid-Three-Pillar-SOC-Detection-Lab/
 │   └── lab-diagram.png                ← 4-VM + 3-pillar diagram            ✅
 ├── scenarios/
 │   ├── scenario-c.md                  ← Credential Access (full writeup)   ✅
-│   └── scenario-a.md                  ← Recon & brute force (A2–A5)   [in progress]
+│   └── scenario-a.md                  ← Recon & brute force (A2–A5 writeup) ✅
 ├── detections/
 │   ├── sentinel-kql/
 │   │   ├── scenario-c-kerberoast.kql  ← validated Kerberoast detection     ✅
-│   │   └── scenario-a-*.kql           ← A2–A5 rules, deployed in Sentinel [committing]
+│   │   ├── scenario-a-a2-smb-share-enum.kql   ← deployed in Sentinel       ✅
+│   │   ├── scenario-a-a3-user-enum.kql        ← deployed in Sentinel       ✅
+│   │   ├── scenario-a-a4-smb-brute-force.kql  ← deployed in Sentinel       ✅
+│   │   └── scenario-a-a5-rdp-brute-force.kql  ← deployed in Sentinel       ✅
 │   ├── elastic-eql/                   ← EQL detections                [roadmap]
 │   └── sigma/                         ← portable Sigma rules          [roadmap]
 ├── email-triage/                      ← phishing triage method + real writeups ✅
@@ -212,7 +217,10 @@ Hybrid-Three-Pillar-SOC-Detection-Lab/
 ├── runbooks/
 │   ├── ama-arc-snapshot-revert-recovery.md   ← AMA / Arc recovery          ✅
 │   └── golden-image-restore.md        ← golden images + restore procedure  ✅
+├── real-world/
+│   └── ssh-bruteforce-oci/            ← 90 days of live internet SSH brute force ✅
 ├── screenshots/                       ← outage → recovery evidence, in order ✅
+│   └── scenario-a/                    ← A2–A5 attack → detection evidence  ✅
 └── soc-reports/                       ← per-scenario analyst reports  [roadmap]
 ```
 
@@ -224,7 +232,8 @@ The repo was published architecture-and-Scenario-C first; the remaining scenario
 
 🟢 **Infrastructure complete** — all three pillars live and ingesting.
 🟢 **Scenario C (Credential Access) complete** — LSASS dump + Kerberoasting, detected and validated across pillars; writeup and detection rule published.
-🟡 **Scenario A (Reconnaissance) — 4 of 5 examples validated + deployed.** SMB share enumeration, user enumeration, SMB brute force, and RDP brute force all proven against live attack telemetry and running as custom Sentinel analytics rules with MITRE + entity mapping. A1 (port scan) in progress; writeup and rule exports publishing next.
+🟡 **Scenario A (Reconnaissance) — 4 of 5 examples validated + deployed, writeup published.** SMB share enumeration, user enumeration, SMB brute force, and RDP brute force all proven against live attack telemetry and running as custom Sentinel analytics rules with MITRE + entity mapping — full writeup at [`scenarios/scenario-a.md`](scenarios/scenario-a.md), all four rules exported to [`detections/sentinel-kql/`](detections/sentinel-kql/), attack→detection evidence in [`screenshots/scenario-a/`](screenshots/scenario-a/). A1 (port scan) in progress.
+🟢 **Real-world observation published** — 90 days of unsolicited internet SSH brute force against the public OCI Elastic host (118,971 failed auths, zero successes), the live-fire companion to Scenario A's simulated brute force: [`real-world/ssh-bruteforce-oci/`](real-world/ssh-bruteforce-oci/).
 🟢 **Email triage published** — method, Tier 1 playbook, and real analyzed specimens (benign + malicious), plus an agentic triage pilot.
 🟢 **Lab lifecycle automation published** — golden images, one-command restore, and health verification, tested end-to-end against a deliberate break.
 🔨 **In progress** — Scenario A1, Scenario B (Execution & Persistence), scenarios D and E, per-example NIST CSF reports, and portable Sigma/EQL detections.

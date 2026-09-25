@@ -1,0 +1,24 @@
+// Scenario A — A2: SMB Share Enumeration (T1135; roadmap row lists T1595.002)
+// 5140 (network share accessed) + 5145 (share object access check) from one source,
+// many shares / varied access masks in a tight window = share enumeration.
+// PREREQUISITE: auditpol "File Share" + "Detailed File Share" = Success and Failure
+// on the target. Both are OFF by default — without them this rule has nothing to see.
+let burst_window = 5m;
+let min_events = 10;
+SecurityEvent
+| where EventID in (5140, 5145)
+| where IpAddress !in ("-", "127.0.0.1", "::1")
+| where Account !endswith "$"                       // exclude machine accounts
+| summarize
+    EventCount   = count(),
+    ShareCount   = dcount(ShareName),
+    Shares       = make_set(ShareName, 10),
+    AccessMasks  = make_set(AccessMask, 20),
+    FirstSeen    = min(TimeGenerated),
+    LastSeen     = max(TimeGenerated),
+    SampleFiles  = make_set(RelativeTargetName, 15)  // tool probe files + srvsvc/svcctl pipe binds
+    by IpAddress, Account, bin(TimeGenerated, burst_window)
+| where EventCount >= min_events
+| extend BurstSeconds = datetime_diff('second', LastSeen, FirstSeen)
+| project TimeGenerated, IpAddress, Account, EventCount, ShareCount, Shares, AccessMasks, BurstSeconds, SampleFiles
+| sort by EventCount desc
